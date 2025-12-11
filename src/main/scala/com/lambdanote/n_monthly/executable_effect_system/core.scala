@@ -213,10 +213,12 @@ extension [M[_]: Monad as m, E](program: Executable[M, E])
 object finiteFormalSum {
   case class FiniteIntSum(summands: List[Int])
 
-  // モノイドの型クラスの定義。実装規約として、次の等式が守られることを要請する。
-  // - combine(x, unit) = x
-  // - combine(unit, y) = y
-  // - combine(combine(x, y), z) = combine(x, combine(y, z))
+  /**
+   * モノイドの型クラスの定義。実装規約として、次の等式が守られることを要請する。
+   *  - `combine(x, unit) = x`
+   *  - `combine(unit, y) = y`
+   *  - `combine(combine(x, y), z) = combine(x, combine(y, z))`
+   */
   trait Monoid[T] {
     def unit: T
     def combine(x: T, y: T): T
@@ -481,8 +483,10 @@ object workingExample {
 }
 
 enum ManyWorlds[BI]:
-  // 「宇宙全体を二股に分岐させる」命令
-  // true が返ってくる宇宙と false が返ってくるような宇宙が同時に発生することを期待する
+  /**
+   * 「宇宙全体を二股に分岐させる」命令。
+   * true が返ってくる宇宙と false が返ってくるような宇宙が同時に発生することを期待する
+   */
   case Fork extends ManyWorlds[Boolean]
 
   // 「いまいる宇宙全体を破壊する」終端命令
