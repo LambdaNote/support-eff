@@ -22,7 +22,15 @@
 - 次のように`import`文の後に`workingExample.unsafeRunTestProgram`を実行することで、コード2.67のコード片が実行できる。
   ```Scala
   scala> import com.lambdanote.n_monthly.executable_effect_system.*
+
   scala> workingExample.unsafeRunTestProgram
+  [INFO] Diff checking started
+  [INFO] sending request to https://www.example.com
+  [INFO] received response of size 513
+  [INFO] sending request to https://www.example.net
+  [INFO] received response of size 513
+  [INFO] Diff checking finished in 1118 ms
+  val res0: Boolean = false
   ```
 
 ### 環境を自前で用意する場合の手順
@@ -33,7 +41,15 @@
 - 次のように`import`文の後に`workingExample.unsafeRunTestProgram`を実行することで、コード2.67のコード片が実行できる。
   ```Scala
   scala> import com.lambdanote.n_monthly.executable_effect_system.*
+
   scala> workingExample.unsafeRunTestProgram
+  [INFO] Diff checking started
+  [INFO] sending request to https://www.example.com
+  [INFO] received response of size 513
+  [INFO] sending request to https://www.example.net
+  [INFO] received response of size 513
+  [INFO] Diff checking finished in 1258 ms
+  val res0: Boolean = false
   ```
 
 環境によっては`SSLHandshakeException`が出るようなので、その場合、
