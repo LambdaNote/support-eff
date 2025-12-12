@@ -1,0 +1,33 @@
+{
+    "name": "n月刊ラムダノート通巻11号 エフェクトシステム記事のデモ環境",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": "."
+    },
+    "remoteUser": "vscode",
+    "features": {
+        "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "GitHub.copilot",
+                "Anthropic.claude-code",
+                "scalameta.metals"
+            ],
+            "settings": {
+                "files.eol": "\n",
+                "files.insertFinalNewline": true,
+                "files.trimFinalNewlines": true,
+                "files.trimTrailingWhitespace": true,
+                "editor.formatOnSave": true,
+                "metals.startMcpServer": true,
+                "metals.mcpClient": "claude"
+            }
+        }
+    },
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+    // Windowsでcloneしてきた場合に備えて、chown+dos2unixでファイル所有者/改行コードをunix形式に統一する
+    "onCreateCommand": "sudo chown -R $(id -u):$(id -g) /workspace && git ls-files -z | sudo xargs -0 dos2unix && git add -A"
+}

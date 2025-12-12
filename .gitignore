@@ -8,3 +8,5 @@ project/**/metals.sbt
 project/**/target
 
 target
+
+.mcp.json
