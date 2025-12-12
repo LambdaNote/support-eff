@@ -7,6 +7,9 @@ import cats.Monad
 import java.net.URL
 import org.http4s.client.Client
 
+// ------
+// 2.3節のコード（AssemblyProgramからWFAssemblyProgramまで）
+
 enum Reg:
   case A, B, C, D
 
@@ -59,6 +62,9 @@ object wfAssemblyProgram {
 
   // format: on
 }
+
+// ------
+// 2.4節のコード（Executableからfor式によるプログラム構築まで）
 
 enum Executable[Instr[_], ExitCode]:
   case Exit[I[_], EC](
@@ -130,6 +136,9 @@ val decRegAByTwoUntilNonPos1: Executable[IncDecCompInstr, String] =
       case CompRes.Greater => decRegAByTwoUntilNonPos1
     }
   } yield result
+
+// ------
+// 2.5節のコード（compactify/transpile関数の定義と、それらを用いたunsafeRunReadByteExeの例まで）
 
 object readWrite_Example {
   enum ReadWriteByte[B]:
@@ -210,6 +219,7 @@ extension [M[_]: Monad as m, E](program: Executable[M, E])
       case NonEmpty(headInstr, branches) =>
         m.flatMap(headInstr)(r => branches(r).compactify)
 
+// 2.5.4節の、compactifyに至る議論で出てくるコード群
 object finiteFormalSum {
   case class FiniteIntSum(summands: List[Int])
 
@@ -275,10 +285,60 @@ object finiteFormalSum {
   FormalSum(List(1, 1, 2)).evaluate // 4
 }
 
+// ------
+// 2.6節のコード（mix型、Containment/AllowsElim型クラス、.elaborate関数）
+
 case class Mix[F[_], G[_], A](inner: Either[F[A], G[A]])
 
 // 中置記法で LogInstrs mix RandInstrs のように書けるようにする
 infix type mix[F[_], G[_]] = [A] =>> Mix[F, G, A]
+
+enum HttpGet[A]:
+  // オペランドに指定されたURLにGetリクエストを送り、
+  // レスポンスを最後まで読み切って、レスポンスのボディを
+  // IArray[Byte]として返す
+  case Request(url: String) extends HttpGet[IArray[Byte]]
+
+enum LogInstrs[B]:
+  case Info(msg: String) extends LogInstrs[Unit]
+  case Warn(msg: String) extends LogInstrs[Unit]
+  case Error(msg: String) extends LogInstrs[Unit]
+
+enum RandInstrs[B]:
+  case NextByte extends RandInstrs[Byte]
+  case NextInt extends RandInstrs[Int]
+  case NextLong extends RandInstrs[Long]
+
+// 全ての命令を一度にIOに展開する形の（「モジュラーでない」が、妥当な）トランスパイラ
+object onePassTranspilation {
+  def expandHttpGetLogRand[B](httpClient: Client[IO])(
+    instr: (HttpGet mix LogInstrs mix RandInstrs)[B]
+  ): Executable[IO, B] =
+    instr match
+      case Mix(Left(Mix(Left(HttpGet.Request(url))))) =>
+        (
+          for {
+            _ <- IO.println(s"[INFO] sending request to $url")
+            responseBody <- httpClient.expect[Array[Byte]](url)
+            _ <- IO.println(
+              s"[INFO] received response of " +
+                s"size ${responseBody.length}"
+            )
+          } yield IArray.from(responseBody)
+        ).asSingleInstrExe
+      case Mix(Left(Mix(Right(LogInstrs.Info(msg))))) =>
+        IO.println(s"[INFO] $msg").asSingleInstrExe
+      case Mix(Left(Mix(Right(LogInstrs.Warn(msg))))) =>
+        IO.println(s"[WARN] $msg").asSingleInstrExe
+      case Mix(Left(Mix(Right(LogInstrs.Error(msg))))) =>
+        IO.println(s"[ERROR] $msg").asSingleInstrExe
+      case Mix(Right(RandInstrs.NextByte)) =>
+        IO { scala.util.Random().nextBytes(1).head }.asSingleInstrExe
+      case Mix(Right(RandInstrs.NextInt)) =>
+        IO { scala.util.Random().nextInt() }.asSingleInstrExe
+      case Mix(Right(RandInstrs.NextLong)) =>
+        IO { scala.util.Random().nextLong() }.asSingleInstrExe
+}
 
 trait Containment[Mixed[_], G[_]]:
   // 「F[_]がG[_]を包含しているのなら、各G[A]をF[A]に『アップキャスト』できるはず」
@@ -350,64 +410,21 @@ given elimTransR: [L[_], R[_], F[_]] => (rElim: AllowsElim[R, F])
             case Left(fa)  => Mix(Left(fa))
             case Right(rr) => Mix(Right(Mix(Right(rr))))
 
-enum HttpGet[A]:
-  // オペランドに指定されたURLにGetリクエストを送り、
-  // レスポンスを最後まで読み切って、レスポンスのボディを
-  // IArray[Byte]として返す
-  case Request(url: String) extends HttpGet[IArray[Byte]]
+extension [Src[_], A](program: Executable[Src, A])
+  def elaborate[I[_]](using elim: AllowsElim[Src, I])(
+    expand: [X] => I[X] => Executable[elim.ElimResult, X]
+  ): Executable[elim.ElimResult, A] =
+    program.transpile([X] =>
+      (instr: Src[X]) =>
+        elim.classify(instr).inner match
+          case Left(targetInstr)   => expand(targetInstr)
+          case Right(uninterested) => uninterested.asSingleInstrExe
+    )
 
-enum LogInstrs[B]:
-  case Info(msg: String) extends LogInstrs[Unit]
-  case Warn(msg: String) extends LogInstrs[Unit]
-  case Error(msg: String) extends LogInstrs[Unit]
-
-enum RandInstrs[B]:
-  case NextByte extends RandInstrs[Byte]
-  case NextInt extends RandInstrs[Int]
-  case NextLong extends RandInstrs[Long]
-
-object onePassTranspilation {
-  def expandHttpGetLogRand[B](httpClient: Client[IO])(
-    instr: (HttpGet mix LogInstrs mix RandInstrs)[B]
-  ): Executable[IO, B] =
-    instr match
-      case Mix(Left(Mix(Left(HttpGet.Request(url))))) =>
-        (
-          for {
-            _ <- IO.println(s"[INFO] sending request to $url")
-            responseBody <- httpClient.expect[Array[Byte]](url)
-            _ <- IO.println(
-              s"[INFO] received response of " +
-                s"size ${responseBody.length}"
-            )
-          } yield IArray.from(responseBody)
-        ).asSingleInstrExe
-      case Mix(Left(Mix(Right(LogInstrs.Info(msg))))) =>
-        IO.println(s"[INFO] $msg").asSingleInstrExe
-      case Mix(Left(Mix(Right(LogInstrs.Warn(msg))))) =>
-        IO.println(s"[WARN] $msg").asSingleInstrExe
-      case Mix(Left(Mix(Right(LogInstrs.Error(msg))))) =>
-        IO.println(s"[ERROR] $msg").asSingleInstrExe
-      case Mix(Right(RandInstrs.NextByte)) =>
-        IO { scala.util.Random().nextBytes(1).head }.asSingleInstrExe
-      case Mix(Right(RandInstrs.NextInt)) =>
-        IO { scala.util.Random().nextInt() }.asSingleInstrExe
-      case Mix(Right(RandInstrs.NextLong)) =>
-        IO { scala.util.Random().nextLong() }.asSingleInstrExe
-}
+// ------
+// 2.7節のコード（.elaborateによるトランスパイラ実装と、実際に動かせるテストプログラム）
 
 object elaborationTranspilation {
-  extension [Src[_], A](program: Executable[Src, A])
-    def elaborate[I[_]](using elim: AllowsElim[Src, I])(
-      expand: [X] => I[X] => Executable[elim.ElimResult, X]
-    ): Executable[elim.ElimResult, A] =
-      program.transpile([X] =>
-        (instr: Src[X]) =>
-          elim.classify(instr).inner match
-            case Left(targetInstr)   => expand(targetInstr)
-            case Right(uninterested) => uninterested.asSingleInstrExe
-      )
-
   def httpGetElaboration(httpClient: Client[IO])[
     Res[_]: {Contains[IO], Contains[LogInstrs]}
   ]: [X] => HttpGet[X] => Executable[Res, X] =
@@ -481,6 +498,9 @@ object workingExample {
         .compactify // コンパイル
     compiled.unsafeRunSync() // ランタイムを用いた実行
 }
+
+// ------
+// 2.8.1節のコード
 
 enum ManyWorlds[BI]:
   /**
